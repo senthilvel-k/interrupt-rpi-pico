@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interrupt Handling · Pico Learning Series</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #ff5555;
+    --accent-dim: #cc3333;
+    --accent-glow: rgba(255,85,85,0.15);
+    --bg: #0a0505;
+    --bg2: #120808;
+    --bg3: #1a0d0d;
+    --surface: #1e1010;
+    --border: rgba(255,85,85,0.12);
+    --text: #f5e0e0;
+    --text-dim: #ad8a8a;
+    --text-muted: #6b4a4a;
+    --green: #00ff88;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; overflow-x: hidden; }
+  body::before { content: ''; position: fixed; inset: 0; background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px); pointer-events: none; z-index: 1000; }
+
+  /* SERIES NAV */
+  .series-bar { background: rgba(10,5,5,0.95); border-bottom: 1px solid var(--border); padding: 0.5rem 3rem; display: flex; align-items: center; gap: 1.5rem; position: sticky; top: 0; z-index: 200; backdrop-filter: blur(12px); }
+  .series-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.2em; white-space: nowrap; }
+  .series-links { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .series-link { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; padding: 0.25rem 0.6rem; border-radius: 2px; text-decoration: none; border: 1px solid rgba(255,255,255,0.06); color: var(--text-muted); transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.06em; }
+  .series-link:hover { border-color: var(--accent); color: var(--accent); }
+  .series-link.active { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+  .series-link.portfolio { margin-left: auto; color: #7aad91; border-color: rgba(0,255,136,0.2); }
+  .series-link.portfolio:hover { color: var(--green); border-color: var(--green); }
+
+  /* HERO */
+  .hero { min-height: 100vh; display: grid; grid-template-columns: 1fr 1fr; align-items: center; padding: 5rem 3rem 3rem; gap: 4rem; }
+  .hero-tag { display: inline-flex; align-items: center; gap: 0.6rem; background: var(--surface); border: 1px solid var(--border); border-radius: 2px; padding: 0.4rem 1rem; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1.5rem; }
+  .hero-tag::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .hero-num { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.2em; margin-bottom: 0.5rem; }
+  .hero-title { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; margin-bottom: 1rem; }
+  .hero-title em { font-style: normal; color: var(--accent); display: block; text-shadow: 0 0 30px rgba(255,85,85,0.3); }
+  .hero-sub { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--text-dim); letter-spacing: 0.08em; margin-bottom: 1.5rem; }
+  .hero-learn { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; }
+  .learn-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 0.75rem; }
+  .learn-item { font-size: 0.82rem; color: var(--text-dim); line-height: 1.7; padding-left: 1rem; position: relative; }
+  .learn-item::before { content: '→'; position: absolute; left: 0; color: var(--accent); }
+  .hero-btns { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .btn-primary { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; padding: 0.55rem 1.25rem; background: var(--accent); color: #0a0505; border-radius: 2px; text-decoration: none; font-weight: 700; letter-spacing: 0.05em; transition: opacity 0.2s; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-ghost { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; padding: 0.55rem 1.25rem; border: 1px solid var(--border); color: var(--text-dim); border-radius: 2px; text-decoration: none; letter-spacing: 0.05em; transition: all 0.2s; }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* INTERRUPT ANIMATION */
+  .interrupt-demo { position: relative; }
+  .demo-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 1.5rem; }
+  .demo-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.25em; margin-bottom: 1.25rem; text-align: center; }
+
+  .signal-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+  .sig-name { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--accent); width: 80px; flex-shrink: 0; }
+  .sig-track { flex: 1; height: 36px; position: relative; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+
+  /* CPU state indicator */
+  .cpu-box { margin-top: 1.25rem; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 0.75rem 1rem; }
+  .cpu-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 0.5rem; }
+  .cpu-state { font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem; color: var(--accent); }
+  .cpu-desc { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+  /* LED indicator */
+  .led-row { display: flex; align-items: center; gap: 1.5rem; margin-top: 1.25rem; }
+  .led-bulb { width: 28px; height: 28px; border-radius: 50%; background: #3a1010; border: 2px solid #5a2020; transition: all 0.1s; }
+  .led-bulb.on { background: var(--accent); border-color: #ff8888; box-shadow: 0 0 15px var(--accent), 0 0 30px rgba(255,85,85,0.4); }
+  .led-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--text-dim); }
+  .led-count { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--text-muted); }
+
+  .trigger-btn { margin-top: 1rem; width: 100%; padding: 0.6rem; background: rgba(255,85,85,0.08); border: 1px solid var(--border); border-radius: 3px; color: var(--accent); font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase; transition: all 0.2s; }
+  .trigger-btn:hover { background: rgba(255,85,85,0.15); border-color: var(--accent); }
+  .trigger-btn:active { transform: scale(0.98); }
+
+  /* SECTIONS */
+  section { position: relative; z-index: 1; padding: 5rem 3rem; }
+  .section-divider { height: 1px; background: linear-gradient(90deg,transparent,var(--border),transparent); margin: 0 3rem; }
+  .section-header { text-align: center; margin-bottom: 3.5rem; }
+  .section-num { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--accent); letter-spacing: 0.3em; text-transform: uppercase; margin-bottom: 0.75rem; opacity: 0.8; }
+  .section-title { font-size: clamp(1.8rem, 3.5vw, 3rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+  .section-title em { font-style: normal; color: var(--accent); }
+  .alt-bg { background: var(--bg2); }
+
+  /* CONCEPT CARDS */
+  .concept-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+  .concept-card { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1.5rem; transition: border-color 0.3s, transform 0.3s; }
+  .concept-card:hover { border-color: rgba(255,85,85,0.3); transform: translateY(-3px); }
+  .cc-icon { font-size: 1.8rem; margin-bottom: 1rem; }
+  .cc-title { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 0.6rem; }
+  .cc-body { font-size: 0.85rem; color: var(--text-dim); line-height: 1.7; }
+  .cc-tag { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--accent); border: 1px solid var(--border); padding: 0.2rem 0.5rem; border-radius: 2px; margin-top: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; }
+
+  /* FLOW DIAGRAM */
+  .flow-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: start; }
+  .flow-diagram { background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 1.5rem; }
+  .flow-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 1.25rem; }
+  .flow-step { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; position: relative; }
+  .flow-step::before { content: ''; position: absolute; left: 15px; top: 32px; width: 1px; height: calc(100% + 4px); background: var(--border); }
+  .flow-step:last-child::before { display: none; }
+  .flow-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--accent); flex-shrink: 0; z-index: 1; }
+  .flow-dot.active { background: rgba(255,85,85,0.15); border-color: var(--accent); box-shadow: 0 0 10px rgba(255,85,85,0.2); }
+  .flow-text h4 { font-size: 0.85rem; font-weight: 700; color: var(--text); margin-bottom: 0.2rem; }
+  .flow-text p { font-size: 0.75rem; color: var(--text-muted); line-height: 1.6; }
+  .flow-code { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--accent); margin-top: 0.3rem; }
+
+  /* CODE */
+  .code-block { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .code-header { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .code-dots { display: flex; gap: 5px; }
+  .code-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .code-dot:nth-child(1){background:#ff5f57} .code-dot:nth-child(2){background:#ffbd2e} .code-dot:nth-child(3){background:#28c840}
+  .code-fname { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--text-muted); }
+  pre { padding: 1.25rem; overflow-x: auto; font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; line-height: 1.7; color: var(--text-dim); max-height: 380px; overflow-y: auto; }
+  pre::-webkit-scrollbar{width:5px;height:5px} pre::-webkit-scrollbar-track{background:var(--bg3)} pre::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .kw{color:#ff79c6} .fn{color:#50fa7b} .cm{color:#5a6a8a;font-style:italic} .nm{color:#ffb700} .st{color:#f1fa8c} .pp{color:#ff8c69} .nu{color:#bd93f9}
+
+  /* FOOTER */
+  footer { padding: 2.5rem 3rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .footer-l { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--text-muted); }
+  .footer-l strong { color: var(--accent); }
+  .footer-r { display: flex; gap: 1.5rem; }
+  .footer-r a { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--text-muted); text-decoration: none; text-transform: uppercase; letter-spacing: 0.1em; transition: color 0.2s; }
+  .footer-r a:hover { color: var(--accent); }
+
+  .reveal { opacity: 0; transform: translateY(25px); transition: opacity 0.7s ease, transform 0.7s ease; }
+  .reveal.visible { opacity: 1; transform: none; }
+
+  @media(max-width:768px){
+    .hero{grid-template-columns:1fr;padding:4rem 1.5rem 3rem}
+    .hero-right{display:none}
+    section{padding:4rem 1.5rem}
+    .concept-grid{grid-template-columns:1fr}
+    .flow-wrap{grid-template-columns:1fr}
+    .series-bar{padding:0.5rem 1rem}
+    footer{flex-direction:column;gap:1.5rem;text-align:center}
+  }
+</style>
+</head>
+<body>
+
+<!-- SERIES NAV -->
+<div class="series-bar">
+  <div class="series-label">🍓 Pico Series</div>
+  <div class="series-links">
+    <a class="series-link" href="../lcd-rpi-pico/">LCD Display</a>
+    <a class="series-link active" href="#">Interrupts</a>
+    <a class="series-link" href="../ultrasonic-rpi-pico/">Ultrasonic</a>
+    <a class="series-link" href="../keypad-rpi-pico/">Keypad</a>
+    <a class="series-link" href="../potentiometer-rpi-pico/">Potentiometer</a>
+    <a class="series-link portfolio" href="https://senthilvel-k.github.io/">← Portfolio</a>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="top">
+  <div>
+    <div class="hero-tag">Episode 02 · Pico Learning Series</div>
+    <div class="hero-num">// CONCEPT: EXTERNAL INTERRUPTS</div>
+    <h1 class="hero-title">Interrupt<em>Handling</em></h1>
+    <div class="hero-sub">Raspberry Pi Pico · GPIO IRQ · Rising Edge · ISR Callback</div>
+    <div class="hero-learn">
+      <div class="learn-title">// What you'll learn</div>
+      <div class="learn-item">What an interrupt is and why it's better than polling</div>
+      <div class="learn-item">How rising/falling edge detection works in hardware</div>
+      <div class="learn-item">How to register an ISR (Interrupt Service Routine) callback</div>
+      <div class="learn-item">How the CPU context-switches to handle an interrupt</div>
+    </div>
+    <div class="hero-btns">
+      <a href="https://github.com/senthilvel-k/interrupt-rpi-pico" target="_blank" class="btn-primary">GitHub Repo ↗</a>
+      <a href="https://senthilvel-k.github.io/#projects" class="btn-ghost">← All Projects</a>
+    </div>
+  </div>
+
+  <div class="interrupt-demo">
+    <div class="demo-box">
+      <div class="demo-label">// Live Interrupt Simulator</div>
+
+      <div class="signal-row">
+        <div class="sig-name">BUTTON</div>
+        <div class="sig-track">
+          <svg id="btn-wave" width="100%" height="36" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+      <div class="signal-row">
+        <div class="sig-name">IRQ LINE</div>
+        <div class="sig-track">
+          <svg id="irq-wave" width="100%" height="36" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+      <div class="signal-row">
+        <div class="sig-name">CPU</div>
+        <div class="sig-track" id="cpu-track">
+          <svg id="cpu-wave" width="100%" height="36" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+
+      <div class="cpu-box">
+        <div class="cpu-title">// CPU State</div>
+        <div class="cpu-state" id="cpu-state-text">MAIN LOOP</div>
+        <div class="cpu-desc" id="cpu-desc-text">while(true) { } — waiting for events</div>
+      </div>
+
+      <div class="led-row">
+        <div class="led-bulb" id="led-demo"></div>
+        <div>
+          <div class="led-label">LED (GPIO 25 — onboard)</div>
+          <div class="led-count" id="led-count-text">Toggle count: 0 / 5</div>
+        </div>
+      </div>
+
+      <button class="trigger-btn" id="trigger-btn" onclick="triggerInterrupt()">
+        ⚡ Press Button → Trigger Interrupt
+      </button>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- CONCEPT -->
+<section id="concept">
+  <div class="section-header reveal">
+    <div class="section-num">// 01 — Core Concepts</div>
+    <h2 class="section-title">What is an <em>Interrupt</em>?</h2>
+  </div>
+  <div class="concept-grid">
+    <div class="concept-card reveal">
+      <div class="cc-icon">🔄</div>
+      <div class="cc-title">Polling vs Interrupts</div>
+      <div class="cc-body">Polling means the CPU constantly checks a pin: "Is the button pressed? Is the button pressed?" This wastes cycles. An interrupt lets the CPU do real work and only react when the hardware signals a change — much more efficient.</div>
+      <div class="cc-tag">Efficiency</div>
+    </div>
+    <div class="concept-card reveal" style="transition-delay:0.1s">
+      <div class="cc-icon">📈</div>
+      <div class="cc-title">Rising Edge Detection</div>
+      <div class="cc-body">A rising edge is the moment a signal transitions from LOW (0V) to HIGH (3.3V). The RP2040's GPIO hardware detects this transition in silicon — without software polling — and fires an interrupt request (IRQ) to the CPU.</div>
+      <div class="cc-tag">GPIO_IRQ_EDGE_RISE</div>
+    </div>
+    <div class="concept-card reveal" style="transition-delay:0.2s">
+      <div class="cc-icon">⚡</div>
+      <div class="cc-title">ISR — Interrupt Service Routine</div>
+      <div class="cc-body">When an IRQ fires, the CPU saves its current state (registers, program counter), jumps to your ISR callback function, executes it, then returns to exactly where it left off. The main loop never even knows it was interrupted.</div>
+      <div class="cc-tag">interrupt_handler()</div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- HOW IT WORKS -->
+<section class="alt-bg" id="howit">
+  <div class="section-header reveal">
+    <div class="section-num">// 02 — Execution Flow</div>
+    <h2 class="section-title">Step-by-Step <em>Flow</em></h2>
+  </div>
+  <div class="flow-wrap">
+    <div class="flow-diagram reveal">
+      <div class="flow-title">// Interrupt Execution Sequence</div>
+      <div class="flow-step">
+        <div class="flow-dot">01</div>
+        <div class="flow-text">
+          <h4>GPIO Pin Init</h4>
+          <p>LED pin → OUTPUT. Button pin (GPIO 11) → INPUT.</p>
+          <div class="flow-code">gpio_init() + gpio_set_dir()</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-dot">02</div>
+        <div class="flow-text">
+          <h4>Register IRQ Callback</h4>
+          <p>Tell the hardware: on rising edge at GPIO 11, call interrupt_handler().</p>
+          <div class="flow-code">gpio_set_irq_enabled_with_callback()</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-dot active">03</div>
+        <div class="flow-text">
+          <h4>Main Loop Runs</h4>
+          <p>CPU enters while(true) — doing nothing, or any other task. The interrupt is armed and watching.</p>
+          <div class="flow-code">while(true) { }</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-dot">04</div>
+        <div class="flow-text">
+          <h4>Button Pressed → Rising Edge</h4>
+          <p>Hardware detects LOW→HIGH transition on GPIO 11. Fires IRQ. CPU saves context, jumps to ISR.</p>
+          <div class="flow-code">GPIO_IRQ_EDGE_RISE detected ⚡</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-dot">05</div>
+        <div class="flow-text">
+          <h4>ISR Executes</h4>
+          <p>interrupt_handler() runs: toggles LED 5× at 1s intervals using busy_wait_ms().</p>
+          <div class="flow-code">gpio_put(LED, 1/0) × 5</div>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-dot">06</div>
+        <div class="flow-text">
+          <h4>Return to Main Loop</h4>
+          <p>ISR returns. CPU restores context. Main loop continues exactly where it paused.</p>
+          <div class="flow-code">context restore → resume</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reveal" style="transition-delay:0.15s">
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+          <div class="code-fname">interrupt.c</div>
+        </div>
+<pre><span class="pp">#include</span> <span class="st">&lt;stdio.h&gt;</span>
+<span class="pp">#include</span> <span class="st">"pico/stdlib.h"</span>
+<span class="pp">#include</span> <span class="st">"hardware/gpio.h"</span>
+
+<span class="pp">#define</span> <span class="nm">LED_OUT</span>     <span class="nm">PICO_DEFAULT_LED_PIN</span>
+<span class="pp">#define</span> <span class="nm">EXT_INT_PIN</span> <span class="nu">11</span>
+
+<span class="cm">// ISR — called automatically when button is pressed
+// CPU suspends main loop, runs this, then returns</span>
+<span class="kw">void</span> <span class="fn">interrupt_handler</span>() {
+    <span class="cm">// Toggle LED 5 times — visual proof interrupt fired</span>
+    <span class="kw">for</span> (<span class="kw">int</span> i = <span class="nu">0</span>; i &lt; <span class="nu">5</span>; i++) {
+        <span class="fn">gpio_put</span>(<span class="nm">LED_OUT</span>, <span class="nu">1</span>);
+        <span class="fn">busy_wait_ms</span>(<span class="nu">1000</span>);
+        <span class="fn">gpio_put</span>(<span class="nm">LED_OUT</span>, <span class="nu">0</span>);
+        <span class="fn">busy_wait_ms</span>(<span class="nu">1000</span>);
+    }
+}
+
+<span class="kw">int</span> <span class="fn">main</span>() {
+    <span class="fn">stdio_init_all</span>();
+
+    <span class="cm">// Setup LED as output</span>
+    <span class="fn">gpio_init</span>(<span class="nm">LED_OUT</span>);
+    <span class="fn">gpio_set_dir</span>(<span class="nm">LED_OUT</span>, <span class="nm">GPIO_OUT</span>);
+
+    <span class="cm">// Setup interrupt pin as input</span>
+    <span class="fn">gpio_init</span>(<span class="nm">EXT_INT_PIN</span>);
+    <span class="fn">gpio_set_dir</span>(<span class="nm">EXT_INT_PIN</span>, <span class="nm">GPIO_IN</span>);
+
+    <span class="cm">// Register ISR: fire on rising edge (button press)</span>
+    <span class="fn">gpio_set_irq_enabled_with_callback</span>(
+        <span class="nm">EXT_INT_PIN</span>,
+        <span class="nm">GPIO_IRQ_EDGE_RISE</span>,
+        <span class="kw">true</span>,
+        &amp;<span class="fn">interrupt_handler</span>
+    );
+
+    <span class="cm">// Main loop — CPU free to do other work</span>
+    <span class="kw">while</span> (<span class="kw">true</span>);
+
+    <span class="kw">return</span> <span class="nu">0</span>;
+}</pre>
+      </div>
+
+      <div style="margin-top:1.5rem; background:var(--bg3); border:1px solid var(--border); border-radius:4px; padding:1rem 1.25rem;">
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:0.6rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.2em; margin-bottom:0.75rem;">// Key API</div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--accent); margin-bottom:0.5rem;">gpio_set_irq_enabled_with_callback(</div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:0.7rem; color:var(--text-dim); padding-left:1rem; line-height:1.9;">
+          pin,         <span style="color:var(--text-muted)">// which GPIO to watch</span><br>
+          trigger,     <span style="color:var(--text-muted)">// EDGE_RISE / EDGE_FALL / LEVEL</span><br>
+          enabled,     <span style="color:var(--text-muted)">// true to arm the interrupt</span><br>
+          callback     <span style="color:var(--text-muted)">// your ISR function pointer</span><br>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--accent);">);</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<section>
+  <div class="section-header reveal">
+    <div class="section-num">// 03 — Hardware</div>
+    <h2 class="section-title">Pin <em>Connections</em></h2>
+  </div>
+  <div style="max-width:500px; margin:0 auto;" class="reveal">
+    <div class="code-block">
+      <div class="code-header">
+        <div class="code-dots"><div class="code-dot"></div><div class="code-dot"></div><div class="code-dot"></div></div>
+        <div class="code-fname">Connection Table</div>
+      </div>
+<pre><span class="cm">Component          GPIO Pin    Direction</span>
+<span class="nm">─────────────────────────────────────────</span>
+<span class="fn">LED (onboard)</span>     <span class="nu">GPIO 25</span>     OUTPUT
+<span class="fn">Button (EXT)</span>      <span class="nu">GPIO 11</span>     INPUT
+<span class="nm">─────────────────────────────────────────</span>
+<span class="cm">// EXT_INT_PIN watches for rising edge
+// LED_OUT toggles 5× on each interrupt</span></pre>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-l"><strong>Interrupt Handling</strong> · Pico Learning Series<br><span style="font-size:0.62rem">Senthil Vel K · skumara4 · October 2023</span></div>
+  <div class="footer-r">
+    <a href="https://github.com/senthilvel-k/interrupt-rpi-pico" target="_blank">GitHub ↗</a>
+    <a href="https://senthilvel-k.github.io/#projects">All Projects</a>
+    <a href="https://senthilvel-k.github.io/">Portfolio</a>
+  </div>
+</footer>
+
+<script>
+  // Interrupt simulator
+  let ledCount = 0, isRunning = false;
+  const states = [
+    { state: 'MAIN LOOP', desc: 'while(true) { } — idle, waiting', color: '#ad8a8a' },
+    { state: 'IRQ DETECTED ⚡', desc: 'Rising edge on GPIO 11 — ISR fired!', color: '#ff5555' },
+    { state: 'ISR RUNNING', desc: 'interrupt_handler() executing...', color: '#ffb700' },
+    { state: 'LED TOGGLE', desc: 'gpio_put(LED_OUT, 1/0)', color: '#ff5555' },
+    { state: 'MAIN LOOP', desc: 'ISR complete — context restored', color: '#ad8a8a' },
+  ];
+
+  function drawWave(svgId, waveData, color) {
+    const svg = document.getElementById(svgId);
+    if (!svg) return;
+    svg.innerHTML = '';
+    const w = svg.clientWidth || 200, h = 36;
+    let path = `M 0 ${h-6} `;
+    waveData.forEach((seg, i) => {
+      const x1 = (i / waveData.length) * w;
+      const x2 = ((i+1) / waveData.length) * w;
+      const y = seg ? 6 : h-6;
+      const prevY = i === 0 ? h-6 : (waveData[i-1] ? 6 : h-6);
+      if (y !== prevY) path += `L ${x1} ${prevY} L ${x1} ${y} `;
+      path += `L ${x2} ${y} `;
+    });
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', path); p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', '1.5'); p.setAttribute('fill', 'none');
+    svg.appendChild(p);
+  }
+
+  drawWave('btn-wave', [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0], '#ff5555');
+  drawWave('irq-wave', [0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], '#ffb700');
+  drawWave('cpu-wave', [0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0], '#ad8a8a');
+
+  function triggerInterrupt() {
+    if (isRunning) return;
+    isRunning = true;
+    ledCount = 0;
+    document.getElementById('trigger-btn').disabled = true;
+    document.getElementById('trigger-btn').textContent = '⚡ Interrupt Firing...';
+
+    const cpuStateEl = document.getElementById('cpu-state-text');
+    const cpuDescEl = document.getElementById('cpu-desc-text');
+    const led = document.getElementById('led-demo');
+    const ledCountEl = document.getElementById('led-count-text');
+
+    // Redraw waves with animation
+    drawWave('btn-wave', [0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0], '#ff5555');
+    drawWave('irq-wave', [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], '#ffb700');
+    drawWave('cpu-wave', [0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0], '#ff5555');
+
+    cpuStateEl.textContent = states[1].state; cpuStateEl.style.color = states[1].color;
+    cpuDescEl.textContent = states[1].desc;
+
+    let toggle = 0;
+    const interval = setInterval(() => {
+      toggle++;
+      if (toggle <= 10) {
+        const on = toggle % 2 === 1;
+        led.classList.toggle('on', on);
+        ledCount = Math.ceil(toggle / 2);
+        ledCountEl.textContent = `Toggle count: ${ledCount} / 5`;
+        cpuStateEl.textContent = states[3].state; cpuStateEl.style.color = states[3].color;
+        cpuDescEl.textContent = `gpio_put(LED_OUT, ${on ? 1 : 0}) — blink ${Math.ceil(toggle/2)}/5`;
+      } else {
+        clearInterval(interval);
+        led.classList.remove('on');
+        cpuStateEl.textContent = states[4].state; cpuStateEl.style.color = states[4].color;
+        cpuDescEl.textContent = states[4].desc;
+        drawWave('btn-wave', [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], '#ff5555');
+        drawWave('irq-wave', [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], '#ffb700');
+        drawWave('cpu-wave', [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], '#ad8a8a');
+        document.getElementById('trigger-btn').disabled = false;
+        document.getElementById('trigger-btn').textContent = '⚡ Press Button → Trigger Interrupt';
+        isRunning = false;
+      }
+    }, 500);
+  }
+
+  const observer = new IntersectionObserver(e => e.forEach(x => { if(x.isIntersecting) x.target.classList.add('visible'); }), { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
